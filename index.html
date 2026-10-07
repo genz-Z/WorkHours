@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WorkHours – Emek Bedeli Hesaplayıcı</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root{--bg:#18181b;--card:#1e293b;--fg:#f4f4f5;--mute:#94a3b8;--line:#334155;--em:#10b981;--am:#f59e0b;--ro:#f43f5e;--gr:#34d399;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f4f5;--card:#fff;--fg:#18181b;--mute:#64748b;--line:#e2e8f0}}
+:root[data-theme="dark"]{--bg:#18181b;--card:#1e293b;--fg:#f4f4f5;--mute:#94a3b8;--line:#334155}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif;margin:0;min-height:100%}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px}
+.num{font-variant-numeric:tabular-nums}
+input[type=text],input[type=number]{background:transparent;color:var(--fg);outline:none;width:100%}
+input[type=range]{accent-color:var(--em);width:100%}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:auto;transform:translateY(105%);transition:transform .35s cubic-bezier(.2,.8,.2,1);z-index:30;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));border-radius:24px 24px 0 0}
+.sheet.open{transform:none}
+.scrim{position:fixed;inset:0;background:#0009;opacity:0;pointer-events:none;transition:opacity .3s;z-index:20}
+.scrim.open{opacity:1;pointer-events:auto}
+.bar{transition:width .5s cubic-bezier(.2,.8,.2,1),background .3s}
+.fade{animation:f .35s ease both}@keyframes f{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+button{cursor:pointer}
+.chip{padding:6px 12px;border-radius:999px;border:1px solid var(--line);font-size:13px;white-space:nowrap;background:transparent;color:var(--fg);transition:all .2s}
+.chip.on{border-color:var(--em);background:#10b9811f;color:var(--em);font-weight:600}
+.hide{display:none}
+.story{aspect-ratio:9/16;background:linear-gradient(160deg,#064e3b,#18181b 55%,#451a03);border-radius:24px;border:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="max-w-md mx-auto px-4 pt-4 pb-28">
+
+  <!-- Header -->
+  <header class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">⏳ WorkHours</h1>
+      <p class="text-xs" style="color:var(--mute)">Emek Bedeli Hesaplayıcı</p>
+    </div>
+    <button id="openSettings" class="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold" style="background:#10b9811f;color:var(--em);border:1px solid #10b98155" aria-label="Kazanç ayarları">
+      <span>⚙️</span><span id="pill" class="num">Saatlik Kazancın: — ₺</span>
+    </button>
+  </header>
+
+  <!-- Input -->
+  <section class="card p-5 mb-4">
+    <label class="text-xs uppercase tracking-wider" style="color:var(--mute)">Kategori</label>
+    <div id="cats" class="flex gap-2 overflow-x-auto mt-2 pb-2"></div>
+    <div id="items" class="flex flex-wrap gap-2 mb-3"></div>
+    <input id="name" type="text" placeholder="Eşyanın adını yaz…" class="hide text-lg mb-4 pb-1" style="border-bottom:1px solid var(--line)" maxlength="40" autocomplete="off">
+    <label class="text-xs uppercase tracking-wider" style="color:var(--mute)">Fiyat</label>
+    <div class="flex items-baseline gap-2 mt-1">
+      <input id="price" type="number" inputmode="decimal" min="0" placeholder="0" autofocus class="num text-5xl font-bold">
+      <span id="cur1" class="text-3xl font-semibold" style="color:var(--mute)">₺</span>
+    </div>
+  </section>
+
+  <!-- Impact -->
+  <section id="impact" class="card p-5 mb-4">
+    <p class="text-xs uppercase tracking-wider mb-2" style="color:var(--mute)">Bedeli</p>
+    <div id="hero" class="num text-3xl font-extrabold leading-tight">—</div>
+    <div class="mt-5">
+      <div class="flex justify-between text-xs mb-1.5 num" style="color:var(--mute)"><span id="pctLbl">Aylık mesainin</span><span id="pct">%0</span></div>
+      <div class="h-3 rounded-full overflow-hidden" style="background:var(--line)"><div id="bar" class="bar h-full rounded-full" style="width:0;background:var(--gr)"></div></div>
+    </div>
+    <p id="wake" class="mt-4 text-sm font-semibold leading-snug" style="color:var(--mute)">Bir fiyat girerek başla.</p>
+  </section>
+
+  <!-- Need + Meter -->
+  <section class="card p-5 mb-4">
+    <p class="text-xs uppercase tracking-wider mb-3" style="color:var(--mute)">İhtiyaç Durumu</p>
+    <p class="text-sm font-semibold mb-2">Bu ne kadar ihtiyaç?</p>
+    <div id="gNeed" class="flex flex-wrap gap-2"></div>
+    <p id="needDesc" class="text-xs mt-2 mb-4" style="color:var(--mute)"></p>
+    <p class="text-sm font-semibold mb-2">Ne sıklıkla kullanacaksın?</p>
+    <div id="gUse" class="flex flex-wrap gap-2 mb-4"></div>
+    <p class="text-sm font-semibold mb-2">Elinde benzeri var mı?</p>
+    <div id="gAlt" class="flex flex-wrap gap-2"></div>
+  </section>
+
+  <section class="card p-5 mb-4 text-center">
+    <p class="text-xs uppercase tracking-wider mb-2" style="color:var(--mute)">🧭 Mantık Metre</p>
+    <div id="mScore" class="num text-6xl font-extrabold">%0</div>
+    <div id="mVerdict" class="text-lg font-bold mt-1">Fiyat gir</div>
+    <div class="h-3 rounded-full overflow-hidden mt-4" style="background:linear-gradient(90deg,var(--ro),var(--am),var(--gr));position:relative"><div id="mPin" class="bar" style="position:absolute;top:-3px;width:6px;height:18px;border-radius:3px;background:#fff;left:0;transition:left .5s"></div></div>
+    <div class="flex justify-between text-[10px] mt-1" style="color:var(--mute)"><span>Almamalısın</span><span>Düşün</span><span>Almalısın</span></div>
+    <p id="mWhy" class="text-xs mt-3" style="color:var(--mute)"></p>
+  </section>
+
+  <!-- Share -->
+  <section class="card p-5">
+    <p class="text-xs uppercase tracking-wider mb-3" style="color:var(--mute)">Paylaşılabilir Kart</p>
+    <div class="story mx-auto p-6 flex flex-col justify-between text-white" style="max-width:220px">
+      <div class="text-xs font-bold opacity-80">⏳ WorkHours</div>
+      <div>
+        <div id="sName" class="text-lg font-bold leading-tight break-words">Eşya</div>
+        <div id="sPrice" class="num text-sm opacity-70 mb-3">0 ₺</div>
+        <div class="text-[10px] uppercase tracking-widest opacity-60">Bedeli</div>
+        <div id="sTime" class="num text-xl font-extrabold leading-tight" style="color:#fbbf24">0 Gün 0 Saat</div>
+        <div class="text-xs opacity-70 mt-1">Ter dökerek ödenir.</div>
+      </div>
+      <div class="text-[9px] opacity-50">Alırken düşün.</div>
+    </div>
+    <button id="share" class="w-full mt-4 py-3 rounded-xl font-semibold" style="background:var(--em);color:#04231a">Kopyala / Hikayede Paylaş</button>
+    <p id="toast" class="text-center text-xs mt-2 h-4" style="color:var(--em)"></p>
+  </section>
+</div>
+
+<!-- History button -->
+<button id="openHist" class="fixed bottom-0 left-0 right-0 max-w-md mx-auto py-3 text-sm font-semibold card" style="border-radius:20px 20px 0 0;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:10">🕘 Son Hesaplamalar ▴</button>
+
+<div id="scrim" class="scrim"></div>
+
+<!-- Settings sheet -->
+<div id="setSheet" class="sheet card p-5">
+  <div class="flex justify-between items-center mb-4"><h2 class="font-bold">Kazanç Ayarları</h2><button data-close class="text-xl" aria-label="Kapat">✕</button></div>
+  <label class="text-xs uppercase tracking-wider" style="color:var(--mute)">Aylık Net Gelir</label>
+  <div class="flex gap-2 mt-1 mb-5">
+    <input id="income" type="number" inputmode="decimal" min="0" class="num text-2xl font-bold rounded-xl px-3 py-2" style="border:1px solid var(--line)">
+    <select id="cur" class="rounded-xl px-3 text-lg" style="background:var(--bg);color:var(--fg);border:1px solid var(--line)"><option>₺</option><option>$</option><option>€</option></select>
+  </div>
+  <div class="flex justify-between text-sm mb-1"><span style="color:var(--mute)">Günlük çalışma</span><b id="gdL" class="num" style="color:var(--em)">9 saat</b></div>
+  <input id="gd" type="range" min="4" max="14" step="1" value="9">
+  <div class="flex justify-between text-sm mb-1 mt-4"><span style="color:var(--mute)">Haftada kaç gün</span><b id="gkL" class="num" style="color:var(--em)">5 gün</b></div>
+  <input id="gk" type="range" min="1" max="7" step="1" value="5">
+  <p id="wkInfo" class="text-xs mt-3 num" style="color:var(--em)"></p>
+  <p class="text-xs mt-1" style="color:var(--mute)">Haftalık ve aylık saat otomatik hesaplanır (Aylık = Haftalık × 4,333). Veriler yalnızca cihazında saklanır.</p>
+  <button data-close class="w-full mt-4 py-3 rounded-xl font-semibold" style="background:var(--em);color:#04231a">Tamam</button>
+</div>
+
+<!-- History sheet -->
+<div id="histSheet" class="sheet card p-5">
+  <div class="flex justify-between items-center mb-3"><h2 class="font-bold">Son 5 Hesaplama</h2><button data-close class="text-xl" aria-label="Kapat">✕</button></div>
+  <ul id="histList" class="space-y-2"></ul>
+  <button id="clearHist" class="text-xs mt-3 underline" style="color:var(--mute)">Geçmişi temizle</button>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let S=Object.assign({income:40000,cur:'₺',gd:9,gk:5},store.get('wh_settings',{}));
+let H=store.get('wh_hist',[]);
+const nf=n=>n.toLocaleString('tr-TR',{maximumFractionDigits:0});
+const WH=()=>S.gd*S.gk,MH=()=>WH()*4.333,rate=()=>S.income>0?S.income/MH():0;
+
+function conv(price){
+  const r=rate(); if(!r||!price) return null;
+  const t=Math.round(price/r*1e6)/1e6,G=S.gd,M=MH();
+  const mo=Math.floor(t/M),t2=t-mo*M;
+  let d=Math.floor(t2/G),h=Math.floor(t2%G),m=Math.round((t2-Math.floor(t2))*60);
+  if(m===60){m=0;h++} if(h>=G){h-=G;d++}
+  return {t,mo,d,h,m};
+}
+function label(c,short){
+  if(!c) return '—';
+  const p=[]; if(c.mo) p.push(c.mo+' Ay'); if(c.d) p.push(c.d+' İş Günü'); if(c.h||(!c.d&&!c.m&&!c.mo)) p.push(c.h+' Saat'); if(c.m) p.push(c.m+' Dakika');
+  if(short) return p.join(' ').replace('İş Günü','Gün').replace(' Dakika',' Dk');
+  return p.join(' ');
+}
+function render(){
+  const price=parseFloat($('price').value)||0, c=conv(price), name=$('name').value.trim()||'Eşya';
+  $('pill').textContent='Saatlik Kazancın: '+nf(rate())+' '+S.cur;
+  $('cur1').textContent=S.cur;$('pctLbl').textContent='Aylık mesainin ('+Math.round(MH())+' sa)';
+  $('hero').textContent=label(c);
+  const pct=c?Math.min(100,c.t/MH()*100):0;
+  $('pct').textContent='%'+(c?(c.t/MH()*100).toFixed(1).replace('.',','):'0');
+  let col='var(--gr)',msg='Bir fiyat girerek başla.',mc='var(--mute)';
+  if(c){const w=wake(c);col=w[0];msg=w[1];mc=col}
+  $('bar').style.width=pct+'%';$('bar').style.background=col;
+  $('wake').textContent=msg;$('wake').style.color=mc;
+  $('hero').style.color=c?(c.t<2?'var(--gr)':c.t<=24?'var(--am)':'var(--ro)'):'var(--fg)';
+  $('sName').textContent=name;$('sPrice').textContent=nf(price)+' '+S.cur;
+  $('sTime').textContent=c?label(c,true).replace('İş ',''):'0 Gün 0 Saat';
+  meter(c);
+}
+function renderHist(){
+  const ul=$('histList');
+  ul.innerHTML=H.length?'':'<li class="text-sm" style="color:var(--mute)">Henüz kayıt yok.</li>';
+  H.forEach(x=>{
+    const li=document.createElement('li');li.className='flex justify-between items-center p-3 rounded-xl fade';li.style.background='var(--bg)';
+    const l=document.createElement('div');const a=document.createElement('div');a.className='font-semibold text-sm';a.textContent=x.name;
+    const b=document.createElement('div');b.className='text-xs num';b.style.color='var(--mute)';b.textContent=nf(x.price)+' '+x.cur;
+    l.append(a,b);const r=document.createElement('div');r.className='text-sm font-bold num text-right';r.style.color='var(--am)';r.textContent=x.label;
+    li.append(l,r);li.onclick=()=>{$('name').value=x.name;$('price').value=x.price;closeAll();render()};ul.append(li);
+  });
+}
+function save(){
+  const price=parseFloat($('price').value)||0,c=conv(price);if(!c)return;
+  const name=$('name').value.trim()||'Adsız eşya';
+  H=H.filter(x=>!(x.name===name&&x.price===price));
+  H.unshift({name,price,cur:S.cur,label:label(c,true)});H=H.slice(0,5);
+  store.set('wh_hist',H);renderHist();
+}
+function openS(id){closeAll();$(id).classList.add('open');$('scrim').classList.add('open')}
+function closeAll(){document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('open'));$('scrim').classList.remove('open')}
+
+const CATS={'Yeme-İçme':['🍽️',1,['Akşam Yemeği','Kahve','Market Alışverişi','Fast Food']],
+'Teknoloji':['📱',3,['AirPods Pro','Telefon','Laptop','Kulaklık','Tablet']],
+'Giyim':['👕',3,['Deri Ceket','Ayakkabı','Mont','Kot Pantolon']],
+'Ev & Yaşam':['🏠',2,['Koltuk','Beyaz Eşya','Dekorasyon','Süpürge']],
+'Ulaşım':['🚗',1,['Araç Bakımı','Bisiklet','Uçak Bileti','Taksi']],
+'Sağlık':['💊',0,['İlaç','Diş Tedavisi','Gözlük','Spor Salonu']],
+'Eğitim':['📚',2,['Kurs','Kitap','Online Eğitim']],
+'Eğlence':['🎮',3,['Oyun Konsolu','Sinema','Konser','Abonelik']],
+'Tatil':['✈️',3,['Otel','Tatil Paketi','Yurt Dışı Gezi']],
+'Bakım':['💄',3,['Parfüm','Kuaför','Cilt Bakımı']],
+'Diğer':['➕',3,[]]};
+const NEED=[['Zorunlu','Kira, fatura, ilaç, temel gıda: olmadan olmaz.',100,3],['Gerekli','İş/okul ekipmanı, ulaşım, bakım-onarım.',80,1.5],['Faydalı','Hayatı kolaylaştırır veya zamanla kazandırır.',60,1],['İstek','Konfor, keyif, hobi: ertelenebilir.',40,.6],['Dürtü / Lüks','Anlık heves, gösteriş, "indirim var".',20,.3]];
+const CEIL={'Yeme-İçme':.04,'Teknoloji':.4,'Giyim':.15,'Ev & Yaşam':.6,'Ulaşım':.5,'Sağlık':.5,'Eğitim':.4,'Eğlence':.1,'Tatil':.5,'Bakım':.06,'Diğer':.2};
+const USE=[['Her gün',100],['Haftada birkaç',70],['Ayda birkaç',40],['Nadiren / bir kez',15]];
+const ALT=[['Yok / bozuk',100],['Var ama eskidi',60],['Var, sorunsuz',20]];
+const sel={cat:null,need:3,use:1,alt:1};
+function chips(el,arr,key,fn){
+  el.innerHTML='';
+  arr.forEach((a,i)=>{const b=document.createElement('button');b.className='chip'+(sel[key]===i?' on':'');b.textContent=a[0];
+    b.onclick=()=>{sel[key]=i;drawNeed();render()};el.append(b)});
+}
+function drawNeed(){
+  chips($('gNeed'),NEED,'need',drawNeed);$('needDesc').textContent=NEED[sel.need][1];
+  chips($('gUse'),USE,'use');chips($('gAlt'),ALT,'alt');
+}
+function drawCats(){
+  const el=$('cats');el.innerHTML='';
+  Object.keys(CATS).forEach(k=>{const b=document.createElement('button');b.className='chip'+(sel.cat===k?' on':'');b.textContent=CATS[k][0]+' '+k;
+    b.onclick=()=>{sel.cat=k;sel.need=CATS[k][1];$('name').value='';$('name').classList.toggle('hide',k!=='Diğer');drawCats();drawItems();drawNeed();render()};el.append(b)});
+}
+function drawItems(){
+  const el=$('items');el.innerHTML='';if(!sel.cat)return;
+  CATS[sel.cat][2].concat(['✏️ Elle ekle']).forEach(n=>{const b=document.createElement('button');const man=n.startsWith('✏️');
+    b.className='chip'+((!man&&$('name').value===n)?' on':'');b.textContent=n;
+    b.onclick=()=>{if(man){$('name').value='';$('name').classList.remove('hide');$('name').focus()}else{$('name').value=n;$('name').classList.add('hide')}drawItems();render()};el.append(b)});
+}
+function wake(c){
+  const G=S.gd,wk=Math.round(c.t/WH()*100),dy=(c.t/G).toFixed(1).replace('.',','),w='haftalık çalışmanın %'+wk+"'i";
+  if(c.t<2)return['var(--gr)','Ufak bir mola karşılığı.'];
+  if(c.t<G)return['var(--am)','Bir iş gününden az emek ('+w+'). Makul, ama farkında ol.'];
+  if(c.t<G*3)return['var(--am)','Ciddi düşün: '+dy+' iş günü çalışman gerekiyor, yani '+w+'.'];
+  if(c.t<WH())return['var(--ro)','Büyük finansal taahhüt! '+dy+' iş günü ('+w+'). Bu eşya için günlerce çalışmaya değer mi?'];
+  if(c.t<MH())return['var(--ro)','Bir haftadan fazla emeğin ('+dy+' iş günü) buna gidiyor. Gerçekten değer mi?'];
+  return['var(--ro)','Bir aylık emeğin veya fazlası ('+dy+' iş günü). Ciddi bir yaşam kararı.'];
+}
+function meter(c){
+  if(!c){$('mScore').textContent='%0';$('mScore').style.color='var(--mute)';$('mVerdict').textContent='Fiyat gir';$('mVerdict').style.color='var(--mute)';$('mPin').style.left='0';$('mWhy').textContent='';return}
+  const n=NEED[sel.need],price=parseFloat($('price').value)||0,cat=sel.cat||'Diğer';
+  // Değer: ihtiyaç, kullanım, benzerinin olmaması
+  const V=.45*n[2]+.3*USE[sel.use][1]+.25*ALT[sel.alt][1];
+  // Karşılanabilirlik: kategoriye özgü makul tavan x ihtiyaç toleransı
+  const cap=Math.max(1,S.income*(CEIL[cat]||.2)*n[3]),r=price/cap,F=100/(1+r*r);
+  const sc=Math.max(0,Math.min(100,Math.round(.55*V+.45*F)));
+  const v=sc>=70?['Alabilirsin ✅','var(--gr)']:sc>=45?['Bekle, 3 gün düşün ⏳','var(--am)']:['Almamalısın ⛔','var(--ro)'];
+  $('mScore').textContent='%'+sc;$('mScore').style.color=v[1];$('mVerdict').textContent=v[0];$('mVerdict').style.color=v[1];
+  $('mPin').style.left='calc('+sc+'% - 3px)';
+  $('mWhy').textContent=cat+' · '+n[0]+' için makul tavan ≈ '+nf(cap)+' '+S.cur+' · fiyat tavanın %'+Math.round(r*100)+"'i";
+}
+$('openSettings').onclick=()=>openS('setSheet');
+$('openHist').onclick=()=>{renderHist();openS('histSheet')};
+$('scrim').onclick=closeAll;
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeAll);
+$('price').oninput=render;$('name').oninput=render;
+$('price').onblur=save;$('name').onblur=save;
+[$('price'),$('name')].forEach(e=>e.addEventListener('keydown',ev=>{if(ev.key==='Enter'){save();e.blur()}}));
+$('income').oninput=e=>{S.income=parseFloat(e.target.value)||0;store.set('wh_settings',S);render()};
+$('cur').onchange=e=>{S.cur=e.target.value;store.set('wh_settings',S);render()};
+function info(){$('gdL').textContent=S.gd+' saat';$('gkL').textContent=S.gk+' gün';$('wkInfo').textContent='Haftalık '+WH()+' sa · Aylık '+Math.round(MH())+' sa · ≈ '+(S.gk*4.333).toFixed(1).replace('.',',')+' iş günü/ay'}
+$('gd').oninput=e=>{S.gd=+e.target.value;info();store.set('wh_settings',S);render()};
+$('gk').oninput=e=>{S.gk=+e.target.value;info();store.set('wh_settings',S);render()};
+$('clearHist').onclick=()=>{H=[];store.set('wh_hist',H);renderHist()};
+$('share').onclick=async()=>{
+  const price=parseFloat($('price').value)||0,c=conv(price);
+  if(!c){$('toast').textContent='Önce bir fiyat gir.';return}
+  save();
+  const txt=`${$('name').value.trim()||'Bu eşya'} — ${nf(price)} ${S.cur}\nBedeli: ${label(c,true)} ter ⏳\n#WorkHours`;
+  try{
+    if(navigator.share){await navigator.share({text:txt});$('toast').textContent='Paylaşıldı ✓'}
+    else{await navigator.clipboard.writeText(txt);$('toast').textContent='Kopyalandı ✓'}
+  }catch(e){
+    try{await navigator.clipboard.writeText(txt);$('toast').textContent='Kopyalandı ✓'}catch(_){$('toast').textContent='Paylaşım başarısız.'}
+  }
+  setTimeout(()=>$('toast').textContent='',2200);
+};
+$('income').value=S.income;$('cur').value=S.cur;$('gd').value=S.gd;$('gk').value=S.gk;info();
+drawCats();drawNeed();render();renderHist();
+</script>
+</body>
+</html>
